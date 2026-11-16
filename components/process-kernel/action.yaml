@@ -1,0 +1,182 @@
+name: 'AnyKernel3 Process Kernel'
+description: 'Discover and stage compiled kernel images, DTBs, modules, ramdisk, and overlays into AnyKernel3.'
+
+inputs:
+  staging-dir:
+    description: 'Prepared AnyKernel3 staging directory'
+    required: true
+  kernel-image:
+    description: 'Path or glob to compiled kernel image'
+    required: false
+    default: ''
+  kernel-image-name:
+    description: 'Override target kernel filename in AnyKernel3 root'
+    required: false
+    default: ''
+  kernel-dir:
+    description: 'Kernel build output directory to auto-discover kernel image'
+    required: false
+    default: ''
+  autodetect:
+    description: '[Beta] Automatically scour cwd, indexed kernel source (out/ then arch/), and artifacts when kernel-image and kernel-dir are omitted'
+    required: false
+    default: 'false'
+  artifacts-dir:
+    description: '[Beta] Optional downloaded artifacts directory to include in scour'
+    required: false
+    default: ''
+  search-arch:
+    description: '[Beta] Target architecture hint (e.g. arm64, arm, x86, riscv) during autodetect scour'
+    required: false
+    default: ''
+  autodetect-extras:
+    description: '[Beta] Also stage companion dtb/dtbo/modules discovered during autodetect'
+    required: false
+    default: 'true'
+  verify-kernel:
+    description: 'Verify binary header magic and Linux kernel strings even for manual kernel paths (always enforced in Beta autodetect)'
+    required: false
+    default: 'false'
+  require-kernel:
+    description: 'Fail if no kernel image is found'
+    required: false
+    default: 'false'
+  dtb-path:
+    description: 'Path to dtb/dtb.img or directory/glob of *.dtb files'
+    required: false
+    default: ''
+  dt-path:
+    description: 'Path to dt / dt.img'
+    required: false
+    default: ''
+  dtbo-path:
+    description: 'Path to dtbo / dtbo.img'
+    required: false
+    default: ''
+  recovery-dtbo-path:
+    description: 'Path to recovery_dtbo / recovery_dtbo.img'
+    required: false
+    default: ''
+  system-dlkm-path:
+    description: 'Path to system_dlkm / system_dlkm.img'
+    required: false
+    default: ''
+  vendor-dlkm-path:
+    description: 'Path to vendor_dlkm / vendor_dlkm.img'
+    required: false
+    default: ''
+  modules-path:
+    description: 'Path or glob to compiled .ko modules'
+    required: false
+    default: ''
+  modules-dest:
+    description: 'Target subdirectory under modules/'
+    required: false
+    default: 'system/lib/modules'
+  preserve-module-tree:
+    description: 'Preserve relative directory tree under modules-dest'
+    required: false
+    default: 'false'
+  include-module-metadata:
+    description: 'Include modules.load/dep/alias metadata'
+    required: false
+    default: 'false'
+  strip-modules:
+    description: 'Strip debug symbols from .ko files'
+    required: false
+    default: 'false'
+  ramdisk-dir:
+    description: 'Directory to copy into ramdisk/'
+    required: false
+    default: ''
+  vendor-ramdisk-dir:
+    description: 'Directory to copy into vendor_ramdisk/'
+    required: false
+    default: ''
+  patch-dir:
+    description: 'Directory to copy into patch/'
+    required: false
+    default: ''
+  vendor-patch-dir:
+    description: 'Directory to copy into vendor_patch/'
+    required: false
+    default: ''
+  banner:
+    description: 'Inline banner text (or file path)'
+    required: false
+    default: ''
+  banner-file:
+    description: 'Path to banner file'
+    required: false
+    default: ''
+  version:
+    description: 'Inline version text (or file path)'
+    required: false
+    default: ''
+  version-file:
+    description: 'Path to version file'
+    required: false
+    default: ''
+  python-bin:
+    description: 'Python 3 executable name or path'
+    required: false
+    default: 'python3'
+
+outputs:
+  kernel-image:
+    description: 'Resolved kernel image filename'
+    value: ${{ steps.run.outputs.kernel-image }}
+  kernel-version:
+    description: 'Detected Linux kernel version string'
+    value: ${{ steps.run.outputs.kernel-version }}
+  modules-count:
+    description: 'Number of staged .ko kernel modules'
+    value: ${{ steps.run.outputs.modules-count }}
+  discovered-from:
+    description: 'Kernel discovery origin (manual or Beta autodetect stage)'
+    value: ${{ steps.run.outputs.discovered-from }}
+  kernel-confidence:
+    description: 'Kernel binary and string verification confidence'
+    value: ${{ steps.run.outputs.kernel-confidence }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Process compiled kernel artifacts
+      id: run
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PYTHON_BIN: ${{ inputs.python-bin }}
+        INPUT_STAGING-DIR: ${{ inputs.staging-dir }}
+        INPUT_KERNEL-IMAGE: ${{ inputs.kernel-image }}
+        INPUT_KERNEL-IMAGE-NAME: ${{ inputs.kernel-image-name }}
+        INPUT_KERNEL-DIR: ${{ inputs.kernel-dir }}
+        INPUT_AUTODETECT: ${{ inputs.autodetect }}
+        INPUT_ARTIFACTS-DIR: ${{ inputs.artifacts-dir }}
+        INPUT_SEARCH-ARCH: ${{ inputs.search-arch }}
+        INPUT_AUTODETECT-EXTRAS: ${{ inputs.autodetect-extras }}
+        INPUT_VERIFY-KERNEL: ${{ inputs.verify-kernel }}
+        INPUT_REQUIRE-KERNEL: ${{ inputs.require-kernel }}
+        INPUT_DTB-PATH: ${{ inputs.dtb-path }}
+        INPUT_DT-PATH: ${{ inputs.dt-path }}
+        INPUT_DTBO-PATH: ${{ inputs.dtbo-path }}
+        INPUT_RECOVERY-DTBO-PATH: ${{ inputs.recovery-dtbo-path }}
+        INPUT_SYSTEM-DLKM-PATH: ${{ inputs.system-dlkm-path }}
+        INPUT_VENDOR-DLKM-PATH: ${{ inputs.vendor-dlkm-path }}
+        INPUT_MODULES-PATH: ${{ inputs.modules-path }}
+        INPUT_MODULES-DEST: ${{ inputs.modules-dest }}
+        INPUT_PRESERVE-MODULE-TREE: ${{ inputs.preserve-module-tree }}
+        INPUT_INCLUDE-MODULE-METADATA: ${{ inputs.include-module-metadata }}
+        INPUT_STRIP-MODULES: ${{ inputs.strip-modules }}
+        INPUT_RAMDISK-DIR: ${{ inputs.ramdisk-dir }}
+        INPUT_VENDOR-RAMDISK-DIR: ${{ inputs.vendor-ramdisk-dir }}
+        INPUT_PATCH-DIR: ${{ inputs.patch-dir }}
+        INPUT_VENDOR-PATCH-DIR: ${{ inputs.vendor-patch-dir }}
+        INPUT_BANNER: ${{ inputs.banner }}
+        INPUT_BANNER-FILE: ${{ inputs.banner-file }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_VERSION-FILE: ${{ inputs.version-file }}
+      run: |
+        "${PYTHON_BIN:-python3}" "$ACTION_PATH/../../main.py" process-kernel
+

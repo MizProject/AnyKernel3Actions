@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run test suite
+        run: python3 -m unittest discover -s tests -v
+
+  action-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create synthetic compiled kernel artifacts
+        run: |
+          mkdir -p mock_out/arch/arm64/boot mock_mods/lib/modules/6.1.99-ci
+          python3 -c '
+          import gzip
+          from pathlib import Path
+          payload = gzip.compress(b"Linux version 6.1.99-ci-test (runner@github)\x00") + b"\xd0\x0d\xfe\xedDTB"
+          Path("mock_out/arch/arm64/boot/Image.gz-dtb").write_bytes(payload)
+          Path("mock_out/arch/arm64/boot/dtbo.img").write_bytes(b"DTBO")
+          Path("mock_mods/lib/modules/6.1.99-ci/sample.ko").write_bytes(b"KO")
+          '
+
+      - name: Run root AnyKernel3 action
+        id: ak3
+        uses: ./
+        with:
+          kernel-dir: mock_out
+          dtbo-path: mock_out/arch/arm64/boot/dtbo.img
+          modules-path: mock_mods
+          modules-dest: vendor/lib/modules
+          kernel-string: "CIKernel {kernel_version}"
+          do-devicecheck: "1"
+          device-names: "sweet,sweetin"
+          supported-versions: "13 - 15"
+          block: "boot"
+          is-slot-device: "0"
+          zip-name: "CIKernel-{device}-{kernel_version}.zip"
+          output-dir: dist
+          write-checksum-file: "true"
+          strict: "true"
+
+      - name: Verify packaged zip and outputs
+        env:
+          ZIP_PATH: ${{ steps.ak3.outputs.zip-path }}
+          KERNEL_VER: ${{ steps.ak3.outputs.kernel-version }}
+          ZIP_SHA: ${{ steps.ak3.outputs.sha256 }}
+        run: |
+          test -f "$ZIP_PATH"
+          test -f "${ZIP_PATH}.sha256"
+          test "$KERNEL_VER" = "6.1.99-ci-test"
+          unzip -t "$ZIP_PATH"
+          python3 -c '
+          import os, zipfile
+          with zipfile.ZipFile(os.environ["ZIP_PATH"]) as zf:
+              names = set(zf.namelist())
+              assert "Image.gz-dtb" in names
+              assert "dtbo.img" in names
+              assert "modules/vendor/lib/modules/sample.ko" in names
+              assert "LICENSE" in names
+              assert not any(n.startswith(".git") for n in names)
+              assert "README.md" not in names
+              assert not any(n.endswith("placeholder") for n in names)
+              ak = zf.read("anykernel.sh").decode()
+              assert "kernel.string=CIKernel 6.1.99-ci-test" in ak
+              assert "device.name1=sweet" in ak
+              assert "device.name2=sweetin" in ak
+              assert "do.modules=1" in ak
+              assert "BLOCK=boot;" in ak
+          '
+
+      - name: Verify Beta autodetect scour on artifacts
+        run: |
+          rm -rf mock_out mock_mods dist
+          mkdir -p artifacts/kernel-build
+          python3 -c '
+          import gzip
+          from pathlib import Path
+          hdr = bytearray(128)
+          hdr[0x38:0x3C] = b"ARM\x64"
+          inner = bytes(hdr) + b"Linux version 6.6.15-beta-scour (runner@github)\x00Kernel command line:\x00"
+          Path("artifacts/kernel-build/Image.gz-dtb").write_bytes(gzip.compress(inner) + b"\xd0\x0d\xfe\xedDTB")
+          '
+
+      - name: Run root AnyKernel3 action with Beta autodetect
+        id: ak3_auto
+        uses: ./
+        with:
+          autodetect: "true"
+          kernel-string: "AutoKernel {kernel_version}"
+          do-devicecheck: "0"
+          block: "boot"
+          zip-name: "AutoKernel-{kernel_version}.zip"
+          output-dir: dist-auto
+          strict: "true"
+
+      - name: Verify Beta autodetect outputs
+        env:
+          AUTO_ZIP: ${{ steps.ak3_auto.outputs.zip-path }}
+          AUTO_FROM: ${{ steps.ak3_auto.outputs.discovered-from }}
+          AUTO_CONF: ${{ steps.ak3_auto.outputs.kernel-confidence }}
+        run: |
+          test -f "$AUTO_ZIP"
+          test "$AUTO_FROM" = "artifacts:artifacts"
+          test "$AUTO_CONF" = "high"
+

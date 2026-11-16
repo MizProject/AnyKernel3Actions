@@ -1,0 +1,43 @@
+name: Build & Package Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+
+      # ... build kernel into out/ ...
+
+      - name: Package AnyKernel3 Flashable Zip
+        id: ak3
+        uses: your-org/AnyKernel3Actions@main
+        with:
+          kernel-dir: out/arch/arm64/boot
+          dtb-path: out/arch/arm64/boot/dts/qcom
+          dtbo-path: out/arch/arm64/boot/dtbo.img
+          modules-path: out/modules_install
+          modules-dest: vendor/lib/modules
+          kernel-string: "MyKernel {kernel_version} by Maintainer"
+          do-devicecheck: "1"
+          device-names: "sweet,sweetin"
+          supported-versions: "13 - 15"
+          block: "boot"
+          is-slot-device: "0"
+          ramdisk-compression: "auto"
+          patch-vbmeta-flag: "auto"
+          install-mode: "dump_write"
+          zip-name: "MyKernel-{device}-{kernel_version}-{date}-{short_sha}.zip"
+          output-dir: dist
+          write-checksum-file: "true"
+          strict: "true"
+
+      - name: Upload AnyKernel3 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ak3.outputs.zip-name }}
+          path: ${{ steps.ak3.outputs.zip-path }}*
+

@@ -1,0 +1,450 @@
+name: 'AnyKernel3 Packager'
+description: 'Modular Python GitHub Action to process compiled kernels, clean AnyKernel3 .git metadata, configure anykernel.sh, and package a flashable zip.'
+author: 'AnyKernel3Actions'
+
+branding:
+  icon: 'package'
+  color: 'green'
+
+inputs:
+  # --- Base AnyKernel3 source ---
+  anykernel-repo:
+    description: 'Git repository URL for AnyKernel3 base template'
+    required: false
+    default: 'https://github.com/osm0sis/AnyKernel3.git'
+  anykernel-ref:
+    description: 'Branch, tag, or commit SHA to fetch from anykernel-repo'
+    required: false
+    default: 'master'
+  anykernel-path:
+    description: 'Optional local AnyKernel3 directory path (skips cloning anykernel-repo)'
+    required: false
+    default: ''
+  staging-dir:
+    description: 'Directory to stage AnyKernel3 files (defaults to a fresh dir under RUNNER_TEMP)'
+    required: false
+    default: ''
+  clean-staging:
+    description: 'Clean staging-dir before preparing AnyKernel3 base'
+    required: false
+    default: 'true'
+  strip-readme:
+    description: 'Remove upstream README.md from staging and packaged zip'
+    required: false
+    default: 'true'
+
+  # --- Compiled kernel artifacts ---
+  kernel-image:
+    description: 'Path or glob to compiled kernel image (e.g. out/arch/arm64/boot/Image.gz-dtb)'
+    required: false
+    default: ''
+  kernel-image-name:
+    description: 'Override target kernel filename in AnyKernel3 zip root (e.g. Image.gz-dtb)'
+    required: false
+    default: ''
+  kernel-dir:
+    description: 'Kernel build output directory to auto-discover the compiled kernel image'
+    required: false
+    default: ''
+  autodetect:
+    description: '[Beta] Automatically scour cwd, indexed kernel source (out/ then arch/), and artifacts when kernel-image and kernel-dir are omitted'
+    required: false
+    default: 'false'
+  artifacts-dir:
+    description: '[Beta] Optional downloaded artifacts directory to include during scour'
+    required: false
+    default: ''
+  search-arch:
+    description: '[Beta] Target architecture hint (e.g. arm64, arm, x86, riscv) for autodetect scour'
+    required: false
+    default: ''
+  autodetect-extras:
+    description: '[Beta] Also stage companion dtb/dtbo/modules discovered during autodetect'
+    required: false
+    default: 'true'
+  verify-kernel:
+    description: 'Verify binary header magic and Linux kernel strings even for manual kernel paths (always enforced in Beta autodetect)'
+    required: false
+    default: 'false'
+  require-kernel:
+    description: 'Fail if no compiled kernel image is resolved'
+    required: false
+    default: 'false'
+  dtb-path:
+    description: 'Path to dtb/dtb.img or directory/glob of *.dtb files (concatenated into dtb)'
+    required: false
+    default: ''
+  dt-path:
+    description: 'Path to dt / dt.img'
+    required: false
+    default: ''
+  dtbo-path:
+    description: 'Path to dtbo / dtbo.img'
+    required: false
+    default: ''
+  recovery-dtbo-path:
+    description: 'Path to recovery_dtbo / recovery_dtbo.img'
+    required: false
+    default: ''
+  system-dlkm-path:
+    description: 'Path to system_dlkm / system_dlkm.img'
+    required: false
+    default: ''
+  vendor-dlkm-path:
+    description: 'Path to vendor_dlkm / vendor_dlkm.img'
+    required: false
+    default: ''
+  modules-path:
+    description: 'Path or glob to compiled .ko modules or modules_install root'
+    required: false
+    default: ''
+  modules-dest:
+    description: 'Target subdirectory under modules/ when flattening .ko modules'
+    required: false
+    default: 'system/lib/modules'
+  preserve-module-tree:
+    description: 'Preserve relative subdirectory tree under modules-dest'
+    required: false
+    default: 'false'
+  include-module-metadata:
+    description: 'Include modules.load, modules.dep, modules.alias, etc. alongside .ko files'
+    required: false
+    default: 'false'
+  strip-modules:
+    description: 'Strip debug symbols from staged .ko modules using llvm-strip/strip'
+    required: false
+    default: 'false'
+  ramdisk-dir:
+    description: 'Directory of overlay files to copy into AnyKernel3 ramdisk/'
+    required: false
+    default: ''
+  vendor-ramdisk-dir:
+    description: 'Directory of overlay files to copy into AnyKernel3 vendor_ramdisk/'
+    required: false
+    default: ''
+  patch-dir:
+    description: 'Directory of patch files to copy into AnyKernel3 patch/'
+    required: false
+    default: ''
+  vendor-patch-dir:
+    description: 'Directory of patch files to copy into AnyKernel3 vendor_patch/'
+    required: false
+    default: ''
+  banner:
+    description: 'Inline banner text (or file path) to display during flash; supports {kernel_version}, {device}, {date}'
+    required: false
+    default: ''
+  banner-file:
+    description: 'Path to banner file to copy into AnyKernel3 root'
+    required: false
+    default: ''
+  version:
+    description: 'Inline version text (or file path) to display during flash; supports template variables'
+    required: false
+    default: ''
+  version-file:
+    description: 'Path to version file to copy into AnyKernel3 root'
+    required: false
+    default: ''
+
+  # --- anykernel.sh configuration ---
+  config-file:
+    description: 'Optional JSON, TOML, or .properties file containing AnyKernel3 configuration'
+    required: false
+    default: ''
+  anykernel-script:
+    description: 'Optional path to a custom anykernel.sh template to use instead of upstream'
+    required: false
+    default: ''
+  kernel-string:
+    description: 'kernel.string property in anykernel.sh (supports {kernel_version}, {device}, {date}, {short_sha})'
+    required: false
+    default: ''
+  do-devicecheck:
+    description: 'do.devicecheck property (0/1 or false/true)'
+    required: false
+    default: ''
+  do-modules:
+    description: 'do.modules property (0/1 or false/true; auto-enabled when modules are staged unless set)'
+    required: false
+    default: ''
+  do-systemless:
+    description: 'do.systemless property (0/1 or false/true)'
+    required: false
+    default: ''
+  do-cleanup:
+    description: 'do.cleanup property (0/1 or false/true)'
+    required: false
+    default: ''
+  do-cleanuponabort:
+    description: 'do.cleanuponabort property (0/1 or false/true)'
+    required: false
+    default: ''
+  device-names:
+    description: 'Comma, space, or newline separated device codenames for device.name1..N'
+    required: false
+    default: ''
+  supported-versions:
+    description: 'supported.versions property (e.g. "13, 14" or "11 - 15")'
+    required: false
+    default: ''
+  supported-patchlevels:
+    description: 'supported.patchlevels property (e.g. "2024-01 -" or "2024-01 - 2025-01")'
+    required: false
+    default: ''
+  supported-vendorpatchlevels:
+    description: 'supported.vendorpatchlevels property'
+    required: false
+    default: ''
+  extra-properties:
+    description: 'Additional key=value lines appended inside properties()'
+    required: false
+    default: ''
+  block:
+    description: 'BLOCK shell variable (e.g. "boot", "auto", "/dev/block/bootdevice/by-name/boot")'
+    required: false
+    default: ''
+  is-slot-device:
+    description: 'IS_SLOT_DEVICE shell variable ("0", "1", or "auto")'
+    required: false
+    default: ''
+  ramdisk-compression:
+    description: 'RAMDISK_COMPRESSION variable (auto, gz, lzo, lzma, xz, bz2, lz4, lz4-l, cpio, none)'
+    required: false
+    default: ''
+  patch-vbmeta-flag:
+    description: 'PATCH_VBMETA_FLAG variable ("auto", "0", or "1")'
+    required: false
+    default: ''
+  custom-dd:
+    description: 'CUSTOMDD variable for custom dd arguments'
+    required: false
+    default: ''
+  slot-select:
+    description: 'SLOT_SELECT variable ("active" or "inactive")'
+    required: false
+    default: ''
+  no-block-display:
+    description: 'Set NO_BLOCK_DISPLAY=1 when true'
+    required: false
+    default: ''
+  no-magisk-check:
+    description: 'Set NO_MAGISK_CHECK=1 when true'
+    required: false
+    default: ''
+  no-vbmeta-partition-patch:
+    description: 'Set NO_VBMETA_PARTITION_PATCH=1 when true'
+    required: false
+    default: ''
+  install-mode:
+    description: 'Boot install flow: "dump_write" (default), "split_flash" (no ramdisk unpack), or "keep"'
+    required: false
+    default: ''
+  strip-example-patches:
+    description: 'Strip upstream Galaxy Nexus (tuna) sample ramdisk edits (default true for upstream template)'
+    required: false
+    default: ''
+  boot-attributes:
+    description: 'Optional replacement body for boot_attributes()'
+    required: false
+    default: ''
+  ramdisk-patch-commands:
+    description: 'Optional AnyKernel3 shell commands inserted inside boot install section'
+    required: false
+    default: ''
+  flash-generic:
+    description: 'Extra partition names to flash via flash_generic in split_flash mode'
+    required: false
+    default: ''
+  extra-partitions:
+    description: 'JSON array of additional partition blocks (init_boot, vendor_kernel_boot, vendor_boot)'
+    required: false
+    default: ''
+  strict:
+    description: 'Fail validation if upstream placeholder BLOCK or device names remain unconfigured'
+    required: false
+    default: 'false'
+
+  # --- Packaging & runtime ---
+  create-zip:
+    description: 'Package the staged AnyKernel3 tree into a flashable zip'
+    required: false
+    default: 'true'
+  zip-name:
+    description: 'Output zip filename (supports {device}, {devices}, {kernel_version}, {date}, {datetime}, {short_sha})'
+    required: false
+    default: ''
+  output-dir:
+    description: 'Output directory for generated flashable zip'
+    required: false
+    default: '.'
+  compression-level:
+    description: 'Zip deflate compression level (0-9)'
+    required: false
+    default: '9'
+  write-checksum-file:
+    description: 'Also write a <zip-name>.sha256 checksum file alongside the zip'
+    required: false
+    default: 'false'
+  python-bin:
+    description: 'Python 3 executable name or path'
+    required: false
+    default: 'python3'
+
+outputs:
+  zip-path:
+    description: 'Absolute path to the generated AnyKernel3 flashable zip'
+    value: ${{ steps.package.outputs.zip-path }}
+  zip-name:
+    description: 'Filename of the generated AnyKernel3 flashable zip'
+    value: ${{ steps.package.outputs.zip-name }}
+  sha256:
+    description: 'SHA-256 hex digest of the generated zip'
+    value: ${{ steps.package.outputs.sha256 }}
+  md5:
+    description: 'MD5 hex digest of the generated zip'
+    value: ${{ steps.package.outputs.md5 }}
+  size-bytes:
+    description: 'Size of the generated zip in bytes'
+    value: ${{ steps.package.outputs.size-bytes }}
+  staging-dir:
+    description: 'Path to the prepared AnyKernel3 staging directory'
+    value: ${{ steps.prepare.outputs.staging-dir }}
+  ak-base-version:
+    description: 'AK_BASE_VERSION detected from AnyKernel3 updater-script'
+    value: ${{ steps.prepare.outputs.ak-base-version }}
+  anykernel-commit:
+    description: 'Resolved commit SHA of AnyKernel3 base before .git removal'
+    value: ${{ steps.prepare.outputs.anykernel-commit }}
+  kernel-image:
+    description: 'Resolved kernel image filename in AnyKernel3 root'
+    value: ${{ steps.kernel.outputs.kernel-image }}
+  kernel-version:
+    description: 'Detected Linux kernel version string'
+    value: ${{ steps.kernel.outputs.kernel-version }}
+  modules-count:
+    description: 'Number of .ko kernel modules staged'
+    value: ${{ steps.kernel.outputs.modules-count }}
+  discovered-from:
+    description: 'Kernel discovery origin (manual or Beta autodetect stage)'
+    value: ${{ steps.kernel.outputs.discovered-from }}
+  kernel-confidence:
+    description: 'Kernel binary and string verification confidence'
+    value: ${{ steps.kernel.outputs.kernel-confidence }}
+  kernel-string:
+    description: 'Final configured kernel.string property'
+    value: ${{ steps.configure.outputs.kernel-string }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare AnyKernel3 base and strip .git metadata
+      id: prepare
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PYTHON_BIN: ${{ inputs.python-bin }}
+        INPUT_ANYKERNEL-REPO: ${{ inputs.anykernel-repo }}
+        INPUT_ANYKERNEL-REF: ${{ inputs.anykernel-ref }}
+        INPUT_ANYKERNEL-PATH: ${{ inputs.anykernel-path }}
+        INPUT_STAGING-DIR: ${{ inputs.staging-dir }}
+        INPUT_CLEAN-STAGING: ${{ inputs.clean-staging }}
+        INPUT_STRIP-README: ${{ inputs.strip-readme }}
+      run: |
+        "${PYTHON_BIN:-python3}" "$ACTION_PATH/main.py" prepare
+
+    - name: Process compiled kernel artifacts
+      id: kernel
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PYTHON_BIN: ${{ inputs.python-bin }}
+        INPUT_STAGING-DIR: ${{ steps.prepare.outputs.staging-dir }}
+        INPUT_KERNEL-IMAGE: ${{ inputs.kernel-image }}
+        INPUT_KERNEL-IMAGE-NAME: ${{ inputs.kernel-image-name }}
+        INPUT_KERNEL-DIR: ${{ inputs.kernel-dir }}
+        INPUT_AUTODETECT: ${{ inputs.autodetect }}
+        INPUT_ARTIFACTS-DIR: ${{ inputs.artifacts-dir }}
+        INPUT_SEARCH-ARCH: ${{ inputs.search-arch }}
+        INPUT_AUTODETECT-EXTRAS: ${{ inputs.autodetect-extras }}
+        INPUT_VERIFY-KERNEL: ${{ inputs.verify-kernel }}
+        INPUT_REQUIRE-KERNEL: ${{ inputs.require-kernel }}
+        INPUT_DTB-PATH: ${{ inputs.dtb-path }}
+        INPUT_DT-PATH: ${{ inputs.dt-path }}
+        INPUT_DTBO-PATH: ${{ inputs.dtbo-path }}
+        INPUT_RECOVERY-DTBO-PATH: ${{ inputs.recovery-dtbo-path }}
+        INPUT_SYSTEM-DLKM-PATH: ${{ inputs.system-dlkm-path }}
+        INPUT_VENDOR-DLKM-PATH: ${{ inputs.vendor-dlkm-path }}
+        INPUT_MODULES-PATH: ${{ inputs.modules-path }}
+        INPUT_MODULES-DEST: ${{ inputs.modules-dest }}
+        INPUT_PRESERVE-MODULE-TREE: ${{ inputs.preserve-module-tree }}
+        INPUT_INCLUDE-MODULE-METADATA: ${{ inputs.include-module-metadata }}
+        INPUT_STRIP-MODULES: ${{ inputs.strip-modules }}
+        INPUT_RAMDISK-DIR: ${{ inputs.ramdisk-dir }}
+        INPUT_VENDOR-RAMDISK-DIR: ${{ inputs.vendor-ramdisk-dir }}
+        INPUT_PATCH-DIR: ${{ inputs.patch-dir }}
+        INPUT_VENDOR-PATCH-DIR: ${{ inputs.vendor-patch-dir }}
+        INPUT_BANNER: ${{ inputs.banner }}
+        INPUT_BANNER-FILE: ${{ inputs.banner-file }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_VERSION-FILE: ${{ inputs.version-file }}
+        INPUT_DEVICE-NAMES: ${{ inputs.device-names }}
+        INPUT_KERNEL-STRING: ${{ inputs.kernel-string }}
+      run: |
+        "${PYTHON_BIN:-python3}" "$ACTION_PATH/main.py" process-kernel
+
+    - name: Configure anykernel.sh properties and variables
+      id: configure
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PYTHON_BIN: ${{ inputs.python-bin }}
+        INPUT_STAGING-DIR: ${{ steps.prepare.outputs.staging-dir }}
+        INPUT_CONFIG-FILE: ${{ inputs.config-file }}
+        INPUT_ANYKERNEL-SCRIPT: ${{ inputs.anykernel-script }}
+        INPUT_KERNEL-STRING: ${{ inputs.kernel-string }}
+        INPUT_DO-DEVICECHECK: ${{ inputs.do-devicecheck }}
+        INPUT_DO-MODULES: ${{ inputs.do-modules }}
+        INPUT_DO-SYSTEMLESS: ${{ inputs.do-systemless }}
+        INPUT_DO-CLEANUP: ${{ inputs.do-cleanup }}
+        INPUT_DO-CLEANUPONABORT: ${{ inputs.do-cleanuponabort }}
+        INPUT_DEVICE-NAMES: ${{ inputs.device-names }}
+        INPUT_SUPPORTED-VERSIONS: ${{ inputs.supported-versions }}
+        INPUT_SUPPORTED-PATCHLEVELS: ${{ inputs.supported-patchlevels }}
+        INPUT_SUPPORTED-VENDORPATCHLEVELS: ${{ inputs.supported-vendorpatchlevels }}
+        INPUT_EXTRA-PROPERTIES: ${{ inputs.extra-properties }}
+        INPUT_BLOCK: ${{ inputs.block }}
+        INPUT_IS-SLOT-DEVICE: ${{ inputs.is-slot-device }}
+        INPUT_RAMDISK-COMPRESSION: ${{ inputs.ramdisk-compression }}
+        INPUT_PATCH-VBMETA-FLAG: ${{ inputs.patch-vbmeta-flag }}
+        INPUT_CUSTOM-DD: ${{ inputs.custom-dd }}
+        INPUT_SLOT-SELECT: ${{ inputs.slot-select }}
+        INPUT_NO-BLOCK-DISPLAY: ${{ inputs.no-block-display }}
+        INPUT_NO-MAGISK-CHECK: ${{ inputs.no-magisk-check }}
+        INPUT_NO-VBMETA-PARTITION-PATCH: ${{ inputs.no-vbmeta-partition-patch }}
+        INPUT_INSTALL-MODE: ${{ inputs.install-mode }}
+        INPUT_STRIP-EXAMPLE-PATCHES: ${{ inputs.strip-example-patches }}
+        INPUT_BOOT-ATTRIBUTES: ${{ inputs.boot-attributes }}
+        INPUT_RAMDISK-PATCH-COMMANDS: ${{ inputs.ramdisk-patch-commands }}
+        INPUT_FLASH-GENERIC: ${{ inputs.flash-generic }}
+        INPUT_EXTRA-PARTITIONS: ${{ inputs.extra-partitions }}
+        INPUT_STRICT: ${{ inputs.strict }}
+      run: |
+        "${PYTHON_BIN:-python3}" "$ACTION_PATH/main.py" configure
+
+    - name: Package flashable AnyKernel3 zip
+      id: package
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PYTHON_BIN: ${{ inputs.python-bin }}
+        INPUT_STAGING-DIR: ${{ steps.prepare.outputs.staging-dir }}
+        INPUT_CREATE-ZIP: ${{ inputs.create-zip }}
+        INPUT_ZIP-NAME: ${{ inputs.zip-name }}
+        INPUT_OUTPUT-DIR: ${{ inputs.output-dir }}
+        INPUT_COMPRESSION-LEVEL: ${{ inputs.compression-level }}
+        INPUT_WRITE-CHECKSUM-FILE: ${{ inputs.write-checksum-file }}
+        INPUT_STRIP-README: ${{ inputs.strip-readme }}
+      run: |
+        "${PYTHON_BIN:-python3}" "$ACTION_PATH/main.py" package
+

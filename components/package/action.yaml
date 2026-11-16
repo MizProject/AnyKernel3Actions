@@ -1,0 +1,72 @@
+name: 'AnyKernel3 Package Zip'
+description: 'Package staged AnyKernel3 tree into a flashable zip archive with checksums.'
+
+inputs:
+  staging-dir:
+    description: 'Prepared AnyKernel3 staging directory'
+    required: true
+  create-zip:
+    description: 'Whether to build the flashable zip'
+    required: false
+    default: 'true'
+  zip-name:
+    description: 'Output zip filename (supports {device}, {kernel_version}, {date}, {short_sha})'
+    required: false
+    default: ''
+  output-dir:
+    description: 'Directory to write the output zip'
+    required: false
+    default: '.'
+  compression-level:
+    description: 'Zip deflate compression level (0-9)'
+    required: false
+    default: '9'
+  write-checksum-file:
+    description: 'Write <zip-name>.sha256 alongside the zip'
+    required: false
+    default: 'false'
+  include-readme:
+    description: 'Keep README.md in the zip archive'
+    required: false
+    default: 'false'
+  python-bin:
+    description: 'Python 3 executable name or path'
+    required: false
+    default: 'python3'
+
+outputs:
+  zip-path:
+    description: 'Absolute path to the generated flashable zip'
+    value: ${{ steps.run.outputs.zip-path }}
+  zip-name:
+    description: 'Filename of the generated flashable zip'
+    value: ${{ steps.run.outputs.zip-name }}
+  sha256:
+    description: 'SHA-256 hex digest of the generated zip'
+    value: ${{ steps.run.outputs.sha256 }}
+  md5:
+    description: 'MD5 hex digest of the generated zip'
+    value: ${{ steps.run.outputs.md5 }}
+  size-bytes:
+    description: 'Size of the generated zip in bytes'
+    value: ${{ steps.run.outputs.size-bytes }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Package AnyKernel3 zip
+      id: run
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PYTHON_BIN: ${{ inputs.python-bin }}
+        INPUT_STAGING-DIR: ${{ inputs.staging-dir }}
+        INPUT_CREATE-ZIP: ${{ inputs.create-zip }}
+        INPUT_ZIP-NAME: ${{ inputs.zip-name }}
+        INPUT_OUTPUT-DIR: ${{ inputs.output-dir }}
+        INPUT_COMPRESSION-LEVEL: ${{ inputs.compression-level }}
+        INPUT_WRITE-CHECKSUM-FILE: ${{ inputs.write-checksum-file }}
+        INPUT_INCLUDE-README: ${{ inputs.include-readme }}
+      run: |
+        "${PYTHON_BIN:-python3}" "$ACTION_PATH/../../main.py" package
+

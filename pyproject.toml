@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anykernel3-actions"
+version = "0.1.0"
+description = "Modular Python-powered GitHub Action components for packaging compiled kernels with AnyKernel3"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+ak3-actions = "ak3_actions.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ak3_actions*"]
+

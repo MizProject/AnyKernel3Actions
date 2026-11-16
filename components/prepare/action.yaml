@@ -1,0 +1,62 @@
+name: 'AnyKernel3 Prepare Base'
+description: 'Clone or copy AnyKernel3 base and strip .git tags and metadata.'
+
+inputs:
+  anykernel-repo:
+    description: 'Git repository URL for AnyKernel3 base template'
+    required: false
+    default: 'https://github.com/osm0sis/AnyKernel3.git'
+  anykernel-ref:
+    description: 'Branch, tag, or commit SHA to fetch from anykernel-repo'
+    required: false
+    default: 'master'
+  anykernel-path:
+    description: 'Optional local AnyKernel3 directory path'
+    required: false
+    default: ''
+  staging-dir:
+    description: 'Directory to stage AnyKernel3 files'
+    required: false
+    default: ''
+  clean-staging:
+    description: 'Clean staging-dir before preparing'
+    required: false
+    default: 'true'
+  strip-readme:
+    description: 'Remove README.md from staging'
+    required: false
+    default: 'true'
+  python-bin:
+    description: 'Python 3 executable name or path'
+    required: false
+    default: 'python3'
+
+outputs:
+  staging-dir:
+    description: 'Path to prepared AnyKernel3 staging directory'
+    value: ${{ steps.run.outputs.staging-dir }}
+  ak-base-version:
+    description: 'AK_BASE_VERSION from updater-script'
+    value: ${{ steps.run.outputs.ak-base-version }}
+  anykernel-commit:
+    description: 'Resolved commit SHA before .git deletion'
+    value: ${{ steps.run.outputs.anykernel-commit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare AnyKernel3 base
+      id: run
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PYTHON_BIN: ${{ inputs.python-bin }}
+        INPUT_ANYKERNEL-REPO: ${{ inputs.anykernel-repo }}
+        INPUT_ANYKERNEL-REF: ${{ inputs.anykernel-ref }}
+        INPUT_ANYKERNEL-PATH: ${{ inputs.anykernel-path }}
+        INPUT_STAGING-DIR: ${{ inputs.staging-dir }}
+        INPUT_CLEAN-STAGING: ${{ inputs.clean-staging }}
+        INPUT_STRIP-README: ${{ inputs.strip-readme }}
+      run: |
+        "${PYTHON_BIN:-python3}" "$ACTION_PATH/../../main.py" prepare
+

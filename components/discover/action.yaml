@@ -1,0 +1,87 @@
+name: 'AnyKernel3 Autodetect Kernel (Beta)'
+description: '[Beta] Scour current dir, indexed kernel source (out/ then arch/), and GitHub Actions artifacts for a verified compiled Linux kernel.'
+
+inputs:
+  workspace:
+    description: '[Beta] Workspace root directory to index (defaults to GITHUB_WORKSPACE or current dir)'
+    required: false
+    default: ''
+  artifacts-dir:
+    description: '[Beta] Optional directory containing downloaded build artifacts to scour'
+    required: false
+    default: ''
+  search-arch:
+    description: '[Beta] Optional architecture hint (e.g. arm64, arm, x86, riscv)'
+    required: false
+    default: ''
+  autodetect-extras:
+    description: '[Beta] Also detect companion dtb, dtbo, dlkm, and compiled .ko modules'
+    required: false
+    default: 'true'
+  staging-dir:
+    description: 'Optional AnyKernel3 staging directory to exclude from scour'
+    required: false
+    default: ''
+  python-bin:
+    description: 'Python 3 executable name or path'
+    required: false
+    default: 'python3'
+
+outputs:
+  kernel-image:
+    description: 'Path to the verified compiled kernel image'
+    value: ${{ steps.run.outputs.kernel-image }}
+  kernel-image-name:
+    description: 'Filename of the verified compiled kernel image'
+    value: ${{ steps.run.outputs.kernel-image-name }}
+  kernel-dir:
+    description: 'Directory containing the discovered kernel image'
+    value: ${{ steps.run.outputs.kernel-dir }}
+  kernel-version:
+    description: 'Linux kernel version string read from the verified binary'
+    value: ${{ steps.run.outputs.kernel-version }}
+  kernel-arch:
+    description: 'Detected kernel header architecture hint'
+    value: ${{ steps.run.outputs.kernel-arch }}
+  kernel-confidence:
+    description: 'Kernel verification confidence (high or medium)'
+    value: ${{ steps.run.outputs.kernel-confidence }}
+  discovered-from:
+    description: 'Search stage where the verified kernel was found'
+    value: ${{ steps.run.outputs.discovered-from }}
+  kernel-source-dir:
+    description: 'Indexed Linux kernel source directory root if located'
+    value: ${{ steps.run.outputs.kernel-source-dir }}
+  dtb-path:
+    description: 'Companion dtb/dtb.img path if detected'
+    value: ${{ steps.run.outputs.dtb-path }}
+  dtbo-path:
+    description: 'Companion dtbo/dtbo.img path if detected'
+    value: ${{ steps.run.outputs.dtbo-path }}
+  system-dlkm-path:
+    description: 'Companion system_dlkm path if detected'
+    value: ${{ steps.run.outputs.system-dlkm-path }}
+  vendor-dlkm-path:
+    description: 'Companion vendor_dlkm path if detected'
+    value: ${{ steps.run.outputs.vendor-dlkm-path }}
+  modules-path:
+    description: 'Companion compiled modules path if detected'
+    value: ${{ steps.run.outputs.modules-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Autodetect compiled kernel (Beta)
+      id: run
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PYTHON_BIN: ${{ inputs.python-bin }}
+        INPUT_WORKSPACE: ${{ inputs.workspace }}
+        INPUT_ARTIFACTS-DIR: ${{ inputs.artifacts-dir }}
+        INPUT_SEARCH-ARCH: ${{ inputs.search-arch }}
+        INPUT_AUTODETECT-EXTRAS: ${{ inputs.autodetect-extras }}
+        INPUT_STAGING-DIR: ${{ inputs.staging-dir }}
+      run: |
+        "${PYTHON_BIN:-python3}" "$ACTION_PATH/../../main.py" discover
+
