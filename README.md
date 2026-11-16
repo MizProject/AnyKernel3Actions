@@ -27,8 +27,10 @@ Modular, zero-dependency Python GitHub Actions component for packaging compiled 
     do-devicecheck: "1"
     device-names: "sweet,sweetin"
     supported-versions: "13 - 15"
-    block: "boot"
-    is-slot-device: "0"
+    # Required: full boot block partition path (without _a/_b slot suffix)
+    block: "/dev/block/bootdevice/by-name/boot"
+    # A/B slots: "1" for boot_a/boot_b, "0" for non-A/B single boot, "auto" to detect
+    is-slot-device: "1"
     zip-name: "MyKernel-{device}-{kernel_version}-{date}.zip"
     output-dir: dist
     write-checksum-file: "true"
@@ -36,6 +38,18 @@ Modular, zero-dependency Python GitHub Actions component for packaging compiled 
 ```
 
 See [examples/workflow-example.yml](examples/workflow-example.yml) for a full workflow example.
+
+### Boot Partition (`block`) and A/B Slot (`is-slot-device`) Setup
+
+- **`block` (required)**: Always point `block` (here or via `config-file` / `anykernel-script`) to your device's full boot partition path rather than a bare `boot` shorthand or leaving upstream's Galaxy Nexus `omap_hsmmc.0` path:
+  - Qualcomm: `/dev/block/bootdevice/by-name/boot` (or `/dev/block/platform/soc/<addr>/by-name/boot`)
+  - Generic / Samsung / MediaTek / Exynos: `/dev/block/by-name/boot` or `/dev/block/platform/<controller>/by-name/boot`
+  - Broad non-device-specific zips only: `auto`
+  - Do **not** append `_a` or `_b` to `block` when using `is-slot-device: "1"` or `"auto"`; AnyKernel3 appends the active slot suffix automatically.
+- **`is-slot-device`**: Controls whether AnyKernel3 resolves `boot_a` / `boot_b`:
+  - `"1"` — A/B slot devices (`boot_a` and `boot_b`). AnyKernel3 appends the active `_a`/`_b` slot suffix to `BLOCK`.
+  - `"0"` — Non-A/B single-slot devices (`boot` only).
+  - `"auto"` — Automatically detects whether the target device uses `boot_a`/`boot_b` slots or a single `boot` partition.
 
 ## Modular Components
 
@@ -111,8 +125,8 @@ python3 main.py build \
   --kernel-dir out/arch/arm64/boot \
   --kernel-string "LocalBuild {kernel_version}" \
   --device-names "sweet,sweetin" \
-  --block boot \
-  --is-slot-device 0 \
+  --block /dev/block/bootdevice/by-name/boot \
+  --is-slot-device auto \
   --output-dir dist
 ```
 

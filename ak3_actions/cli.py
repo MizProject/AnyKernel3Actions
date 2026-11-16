@@ -135,7 +135,11 @@ def _add_config_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--supported-patchlevels", default=None, help="supported.patchlevels property")
     parser.add_argument("--supported-vendorpatchlevels", default=None, help="supported.vendorpatchlevels property")
     parser.add_argument("--extra-properties", default=None, help="Extra key=value lines for properties()")
-    parser.add_argument("--block", default=None, help="BLOCK shell variable (e.g. boot, auto, /dev/block/...)")
+    parser.add_argument(
+        "--block",
+        default=None,
+        help="Required BLOCK partition path without _a/_b (e.g. /dev/block/bootdevice/by-name/boot)",
+    )
     parser.add_argument("--is-slot-device", default=None, help="IS_SLOT_DEVICE (0, 1, auto)")
     parser.add_argument("--ramdisk-compression", default=None, help="RAMDISK_COMPRESSION (auto, gz, lz4, ...)")
     parser.add_argument("--patch-vbmeta-flag", default=None, help="PATCH_VBMETA_FLAG (auto, 0, 1)")

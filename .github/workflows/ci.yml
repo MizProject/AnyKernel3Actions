@@ -48,8 +48,8 @@ jobs:
           do-devicecheck: "1"
           device-names: "sweet,sweetin"
           supported-versions: "13 - 15"
-          block: "boot"
-          is-slot-device: "0"
+          block: "/dev/block/bootdevice/by-name/boot"
+          is-slot-device: "1"
           zip-name: "CIKernel-{device}-{kernel_version}.zip"
           output-dir: dist
           write-checksum-file: "true"
@@ -81,7 +81,8 @@ jobs:
               assert "device.name1=sweet" in ak
               assert "device.name2=sweetin" in ak
               assert "do.modules=1" in ak
-              assert "BLOCK=boot;" in ak
+              assert "BLOCK=/dev/block/bootdevice/by-name/boot;" in ak
+              assert "IS_SLOT_DEVICE=1;" in ak
           '
 
       - name: Verify Beta autodetect scour on artifacts
@@ -104,7 +105,8 @@ jobs:
           autodetect: "true"
           kernel-string: "AutoKernel {kernel_version}"
           do-devicecheck: "0"
-          block: "boot"
+          block: "/dev/block/bootdevice/by-name/boot"
+          is-slot-device: "auto"
           zip-name: "AutoKernel-{kernel_version}.zip"
           output-dir: dist-auto
           strict: "true"

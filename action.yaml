@@ -201,11 +201,11 @@ inputs:
     required: false
     default: ''
   block:
-    description: 'BLOCK shell variable (e.g. "boot", "auto", "/dev/block/bootdevice/by-name/boot")'
+    description: 'Required (here or via config-file/anykernel-script): Full boot partition block path without _a/_b suffix (e.g. "/dev/block/bootdevice/by-name/boot", "/dev/block/platform/<soc>/by-name/boot", or "/dev/block/by-name/boot"; "auto" for broad zips)'
     required: false
     default: ''
   is-slot-device:
-    description: 'IS_SLOT_DEVICE shell variable ("0", "1", or "auto")'
+    description: 'IS_SLOT_DEVICE for A/B boot_a/boot_b vs non-A/B boot: "1" for A/B slot devices (boot_a/boot_b), "0" for non-A/B single boot, or "auto" to auto-detect'
     required: false
     default: ''
   ramdisk-compression:

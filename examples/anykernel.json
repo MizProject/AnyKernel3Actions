@@ -8,11 +8,10 @@
   "device.names": ["sweet", "sweetin"],
   "supported.versions": "13 - 15",
   "supported.patchlevels": "2024-01 -",
-  "block": "boot",
-  "is-slot-device": "0",
+  "block": "/dev/block/bootdevice/by-name/boot",
+  "is-slot-device": "1",
   "ramdisk-compression": "auto",
   "patch-vbmeta-flag": "auto",
   "install-mode": "dump_write",
   "strip-example-patches": true
 }
-

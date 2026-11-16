@@ -141,7 +141,7 @@ class TestEndToEndPipeline(unittest.TestCase):
                 "do.devicecheck": 1,
                 "device.names": ["alioth", "aliothin"],
                 "supported.versions": "13 - 15",
-                "block": "boot",
+                "block": "/dev/block/bootdevice/by-name/boot",
                 "is-slot-device": "1",
             }),
             encoding="utf-8",
@@ -230,7 +230,7 @@ class TestEndToEndPipeline(unittest.TestCase):
             self.assertEqual(props["device.name1"], "munch")
             self.assertEqual(props["device.name2"], "alioth")
             self.assertNotIn("device.name3", props)
-            self.assertIn("BLOCK=boot;", ak_text)
+            self.assertIn("BLOCK=/dev/block/bootdevice/by-name/boot;", ak_text)
             self.assertIn("IS_SLOT_DEVICE=1;", ak_text)
             self.assertNotIn("init.tuna.rc", ak_text)
 

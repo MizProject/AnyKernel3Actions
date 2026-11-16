@@ -144,7 +144,7 @@ class TestConfigComponent(unittest.TestCase):
         cfg = AnyKernelConfig(
             kernel_string="GKI Kernel",
             do_devicecheck="0",
-            block="boot",
+            block="/dev/block/bootdevice/by-name/boot",
             is_slot_device="1",
             install_mode="split_flash",
         )
@@ -160,18 +160,19 @@ class TestConfigComponent(unittest.TestCase):
         cfg = config_from_mapping({
             "kernel-string": "MultiPart",
             "do-devicecheck": "0",
-            "block": "boot",
+            "block": "/dev/block/bootdevice/by-name/boot",
+            "is-slot-device": "1",
             "install-mode": "split_flash",
             "extra-partitions": [
                 {
                     "name": "vendor_kernel_boot",
-                    "block": "vendor_kernel_boot",
+                    "block": "/dev/block/by-name/vendor_kernel_boot",
                     "is-slot-device": "1",
                     "install-mode": "split_flash",
                 },
                 {
                     "name": "init_boot",
-                    "block": "init_boot",
+                    "block": "/dev/block/by-name/init_boot",
                     "is-slot-device": "1",
                     "install-mode": "dump_write",
                     "commands": "ui_print \"Patched init_boot\";",
@@ -180,28 +181,74 @@ class TestConfigComponent(unittest.TestCase):
         })
         configure_anykernel_script(self.tmp, cfg)
         rendered = (self.tmp / "anykernel.sh").read_text(encoding="utf-8")
-        self.assertIn("BLOCK=boot;", rendered)
-        self.assertIn("BLOCK=vendor_kernel_boot;", rendered)
-        self.assertIn("BLOCK=init_boot;", rendered)
+        self.assertIn("BLOCK=/dev/block/bootdevice/by-name/boot;", rendered)
+        self.assertIn("BLOCK=/dev/block/by-name/vendor_kernel_boot;", rendered)
+        self.assertIn("BLOCK=/dev/block/by-name/init_boot;", rendered)
         self.assertIn("reset_ak;", rendered)
         self.assertIn('ui_print "Patched init_boot";', rendered)
         self.assertNotIn("#init_boot_attributes()", rendered)
 
     def test_single_quote_in_property_raises(self) -> None:
-        cfg = AnyKernelConfig(kernel_string="Bob's Kernel", do_devicecheck="0", block="boot")
+        cfg = AnyKernelConfig(
+            kernel_string="Bob's Kernel",
+            do_devicecheck="0",
+            block="/dev/block/bootdevice/by-name/boot",
+        )
         with self.assertRaises(ValueError):
             configure_anykernel_script(self.tmp, cfg)
 
-    def test_strict_mode_rejects_upstream_defaults(self) -> None:
-        cfg = AnyKernelConfig(kernel_string="Test", strict=True)
-        with self.assertRaises(ValueError):
+    def test_upstream_placeholder_block_always_requires_specification(self) -> None:
+        cfg = AnyKernelConfig(kernel_string="Test", do_devicecheck="0")
+        with self.assertRaises(ValueError) as ctx:
             configure_anykernel_script(self.tmp, cfg)
+        self.assertIn("omap_hsmmc.0", str(ctx.exception))
+
+    def test_strict_mode_rejects_short_block_and_upstream_defaults(self) -> None:
+        cfg_upstream = AnyKernelConfig(kernel_string="Test", strict=True)
+        with self.assertRaises(ValueError):
+            configure_anykernel_script(self.tmp, cfg_upstream)
+
+        cfg_short = AnyKernelConfig(
+            kernel_string="Test",
+            do_devicecheck="0",
+            block="boot",
+            is_slot_device="1",
+            strict=True,
+        )
+        with self.assertRaises(ValueError) as ctx:
+            configure_anykernel_script(self.tmp, cfg_short)
+        self.assertIn("short partition name", str(ctx.exception))
+
+    def test_slot_suffix_with_is_slot_device_raises(self) -> None:
+        for slot_mode in ("1", "auto"):
+            with self.subTest(slot_mode=slot_mode):
+                cfg = AnyKernelConfig(
+                    kernel_string="Test",
+                    do_devicecheck="0",
+                    block="/dev/block/bootdevice/by-name/boot_a",
+                    is_slot_device=slot_mode,
+                )
+                with self.assertRaises(ValueError) as ctx:
+                    configure_anykernel_script(self.tmp, cfg)
+                self.assertIn("boot_a/boot_b", str(ctx.exception))
+
+    def test_is_slot_device_auto_accepted(self) -> None:
+        cfg = AnyKernelConfig(
+            kernel_string="Test",
+            do_devicecheck="0",
+            block="/dev/block/bootdevice/by-name/boot",
+            is_slot_device="auto",
+        )
+        configure_anykernel_script(self.tmp, cfg)
+        rendered = (self.tmp / "anykernel.sh").read_text(encoding="utf-8")
+        self.assertIn("BLOCK=/dev/block/bootdevice/by-name/boot;", rendered)
+        self.assertIn("IS_SLOT_DEVICE=auto;", rendered)
 
     def test_invalid_patchlevel_raises(self) -> None:
         cfg = AnyKernelConfig(
             kernel_string="Test",
             do_devicecheck="0",
-            block="boot",
+            block="/dev/block/bootdevice/by-name/boot",
             supported_patchlevels="not-a-date",
         )
         with self.assertRaises(ValueError):
@@ -211,7 +258,7 @@ class TestConfigComponent(unittest.TestCase):
         cfg1 = AnyKernelConfig(
             kernel_string="Test",
             do_devicecheck="0",
-            block="boot",
+            block="/dev/block/bootdevice/by-name/boot",
             no_block_display=True,
         )
         configure_anykernel_script(self.tmp, cfg1)
@@ -220,7 +267,7 @@ class TestConfigComponent(unittest.TestCase):
         cfg2 = AnyKernelConfig(
             kernel_string="Test",
             do_devicecheck="0",
-            block="boot",
+            block="/dev/block/bootdevice/by-name/boot",
             no_block_display=False,
         )
         configure_anykernel_script(self.tmp, cfg2)

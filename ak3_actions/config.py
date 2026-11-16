@@ -679,17 +679,59 @@ def _validate_anykernel_content(script_path: Path, config: AnyKernelConfig) -> d
             )
 
     # Validate shell variables in primary boot block
-    block_match = re.search(r"^BLOCK=([^;\n]+);", text, re.MULTILINE)
-    if block_match:
-        block_val = block_match.group(1).strip().strip('"')
-        if block_val == UPSTREAM_DEFAULT_BLOCK and config.block is None:
-            msg = (
-                f"BLOCK is still set to upstream Galaxy Nexus path ({UPSTREAM_DEFAULT_BLOCK}); "
-                "configure 'block' (e.g. 'boot', 'auto', or '/dev/block/bootdevice/by-name/boot')."
+    reset_match = re.search(r"^\s*reset_ak\b", text, re.MULTILINE)
+    primary_section = text[: reset_match.start()] if reset_match else text
+
+    block_match = re.search(r"^BLOCK=([^;\n]+);", primary_section, re.MULTILINE)
+    if not block_match:
+        raise ValueError(
+            "anykernel.sh is missing a primary `BLOCK=<partition>;` variable. "
+            "Specify 'block' pointing to a proper boot partition path (e.g. '/dev/block/bootdevice/by-name/boot')."
+        )
+
+    block_val = block_match.group(1).strip().strip('"').strip("'")
+    block_target = block_val.split()[0] if block_val else ""
+    if not block_target:
+        raise ValueError(
+            "BLOCK cannot be empty; specify 'block' pointing to a proper boot partition path "
+            "(e.g. '/dev/block/bootdevice/by-name/boot')."
+        )
+    if block_target == UPSTREAM_DEFAULT_BLOCK and config.block is None and config.custom_script_path is None:
+        raise ValueError(
+            f"BLOCK is still set to the upstream Galaxy Nexus placeholder ({UPSTREAM_DEFAULT_BLOCK}); "
+            "specifying 'block' pointing to a proper boot partition path is required "
+            "(e.g. '/dev/block/bootdevice/by-name/boot' or '/dev/block/platform/<soc>/by-name/boot')."
+        )
+    if not block_target.startswith("/dev/") and block_target != "auto":
+        msg = (
+            f"BLOCK={block_target!r} is a short partition name rather than a full block device path; "
+            "specify the full partition path (e.g. '/dev/block/bootdevice/by-name/boot', "
+            "'/dev/block/by-name/boot', or '/dev/block/platform/<soc>/by-name/boot') or 'auto'."
+        )
+        if config.strict:
+            raise ValueError(msg)
+        warn(msg)
+
+    slot_match = re.search(r"^IS_SLOT_DEVICE=([^;\n]+);", primary_section, re.MULTILINE)
+    is_slot_val = slot_match.group(1).strip().strip('"') if slot_match else "0"
+    if config.is_slot_device is None and config.custom_script_path is None:
+        warn(
+            "is-slot-device was not specified; using upstream IS_SLOT_DEVICE=0 (non-A/B). "
+            "Set is-slot-device to '1' for A/B devices (boot_a/boot_b), '0' for non-A/B, or 'auto'."
+        )
+
+    if block_target.startswith("/dev/") and block_target.endswith(("_a", "_b")):
+        base_block = block_target[:-2]
+        if is_slot_val in {"1", "auto"}:
+            raise ValueError(
+                f"BLOCK={block_target!r} includes slot suffix while IS_SLOT_DEVICE={is_slot_val}; "
+                f"specify the base partition path without '_a'/'_b' (e.g. '{base_block}') so AnyKernel3 "
+                "resolves boot_a/boot_b dynamically."
             )
-            if config.strict:
-                raise ValueError(msg)
-            warn(msg)
+        warn(
+            f"BLOCK={block_target!r} targets a hardcoded slot partition with IS_SLOT_DEVICE=0; "
+            f"prefer base path '{base_block}' with IS_SLOT_DEVICE=1 (or 'auto') for boot_a/boot_b devices."
+        )
 
     for var_name, allowed in (
         ("IS_SLOT_DEVICE", VALID_IS_SLOT),
