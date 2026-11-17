@@ -252,6 +252,10 @@ inputs:
     description: 'Optional AnyKernel3 shell commands inserted inside boot install section'
     required: false
     default: ''
+  deepsleep-fix:
+    description: 'Append @Chainfire SCSI disk cache_type deepsleep fix inside anykernel.sh (true/false)'
+    required: false
+    default: 'false'
   flash-generic:
     description: 'Extra partition names to flash via flash_generic in split_flash mode'
     required: false
@@ -426,6 +430,7 @@ runs:
         INPUT_STRIP-EXAMPLE-PATCHES: ${{ inputs.strip-example-patches }}
         INPUT_BOOT-ATTRIBUTES: ${{ inputs.boot-attributes }}
         INPUT_RAMDISK-PATCH-COMMANDS: ${{ inputs.ramdisk-patch-commands }}
+        INPUT_DEEPSLEEP-FIX: ${{ inputs.deepsleep-fix }}
         INPUT_FLASH-GENERIC: ${{ inputs.flash-generic }}
         INPUT_EXTRA-PARTITIONS: ${{ inputs.extra-partitions }}
         INPUT_STRICT: ${{ inputs.strict }}

@@ -191,6 +191,7 @@ class TestEndToEndPipeline(unittest.TestCase):
                 "INPUT_CONFIG-FILE": str(cfg_file),
                 # Override device-names via env input
                 "INPUT_DEVICE-NAMES": "munch,alioth",
+                "INPUT_DEEPSLEEP-FIX": "true",
                 "INPUT_STRICT": "true",
             },
         )
@@ -232,6 +233,7 @@ class TestEndToEndPipeline(unittest.TestCase):
             self.assertNotIn("device.name3", props)
             self.assertIn("BLOCK=/dev/block/bootdevice/by-name/boot;", ak_text)
             self.assertIn("IS_SLOT_DEVICE=1;", ak_text)
+            self.assertIn("# Deepsleep fix (@Chainfire)", ak_text)
             self.assertNotIn("init.tuna.rc", ak_text)
 
             version_text = zf.read("version").decode("utf-8")

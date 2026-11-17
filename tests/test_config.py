@@ -278,6 +278,71 @@ class TestConfigComponent(unittest.TestCase):
         self.assertEqual(props["kernel.string"], "ExampleKernel by osm0sis @ xda-developers")
         self.assertEqual(props["device.name4"], "tuna")
 
+    def test_deepsleep_fix_injection_and_idempotency(self) -> None:
+        cfg = config_from_mapping({
+            "kernel-string": "SleepFixKernel",
+            "do-devicecheck": "0",
+            "block": "/dev/block/bootdevice/by-name/boot",
+            "is-slot-device": "0",
+            "ramdisk-patch-commands": 'ui_print "- Applying ramdisk tweaks";',
+            "deepsleep-fix": True,
+        })
+        configure_anykernel_script(self.tmp, cfg)
+        rendered = (self.tmp / "anykernel.sh").read_text(encoding="utf-8")
+        self.assertIn("# Deepsleep fix (@Chainfire)", rendered)
+        self.assertIn("echo 'temporary none' > /sys/class/scsi_disk/$i/cache_type", rendered)
+        self.assertLess(rendered.index("dump_boot;"), rendered.index("# Deepsleep fix (@Chainfire)"))
+        self.assertLess(
+            rendered.index("# Deepsleep fix (@Chainfire)"),
+            rendered.index('ui_print "- Applying ramdisk tweaks";'),
+        )
+        self.assertLess(
+            rendered.index('ui_print "- Applying ramdisk tweaks";'),
+            rendered.index("write_boot;"),
+        )
+
+        # Re-running in keep mode must not duplicate the deepsleep snippet
+        cfg_keep = AnyKernelConfig(
+            kernel_string="SleepFixKernel",
+            do_devicecheck="0",
+            block="/dev/block/bootdevice/by-name/boot",
+            is_slot_device="0",
+            install_mode="keep",
+            strip_example_patches=False,
+            deepsleep_fix=True,
+        )
+        configure_anykernel_script(self.tmp, cfg_keep)
+        rendered2 = (self.tmp / "anykernel.sh").read_text(encoding="utf-8")
+        self.assertEqual(rendered2.count("# Deepsleep fix (@Chainfire)"), 1)
+
+        # Custom script without `# boot install ... ## end boot install` anchors still places it right after dump_boot;
+        custom_ak = self.tmp / "custom_anykernel.sh"
+        custom_ak.write_text(
+            "### AnyKernel3\n"
+            "properties() { '\nkernel.string=Custom\ndo.devicecheck=0\n'; } # end properties\n"
+            "BLOCK=/dev/block/by-name/boot;\nIS_SLOT_DEVICE=0;\n"
+            ". tools/ak3-core.sh;\n"
+            "## AnyKernel install\n"
+            "dump_boot;\n\n"
+            "ui_print \"- Other tweaks\";\n\n"
+            "write_boot;\n"
+            "## end install\n",
+            encoding="utf-8",
+        )
+        configure_anykernel_script(
+            self.tmp,
+            AnyKernelConfig(
+                custom_script_path=custom_ak,
+                install_mode="keep",
+                strip_example_patches=False,
+                deepsleep_fix=True,
+            ),
+        )
+        rendered3 = (self.tmp / "anykernel.sh").read_text(encoding="utf-8")
+        self.assertLess(rendered3.index("dump_boot;"), rendered3.index("# Deepsleep fix (@Chainfire)"))
+        self.assertLess(rendered3.index("# Deepsleep fix (@Chainfire)"), rendered3.index('ui_print "- Other tweaks";'))
+        self.assertLess(rendered3.index('ui_print "- Other tweaks";'), rendered3.index("write_boot;"))
+
 
 if __name__ == "__main__":
     unittest.main()

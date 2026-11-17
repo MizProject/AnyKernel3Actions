@@ -137,9 +137,20 @@ class AnyKernelConfig:
     strip_example_patches: bool = True
     boot_attributes_body: str | None = None
     ramdisk_patch_commands: str | None = None
+    deepsleep_fix: bool = False
     flash_generic_partitions: list[str] = field(default_factory=list)
     extra_partitions: list[PartitionBlock] = field(default_factory=list)
     strict: bool = False
+
+
+DEEPSLEEP_FIX_MARKER = "# Deepsleep fix (@Chainfire)"
+DEEPSLEEP_FIX_SNIPPET = """# Deepsleep fix (@Chainfire)
+for i in `ls /sys/class/scsi_disk/ 2>/dev/null`; do
+\tcat /sys/class/scsi_disk/$i/write_protect 2>/dev/null | grep 1 >/dev/null
+\tif [ $? -eq 0 ]; then
+\t\techo 'temporary none' > /sys/class/scsi_disk/$i/cache_type
+\tfi
+done;"""
 
 
 def parse_extra_partitions(raw: str | list[dict[str, Any]] | None) -> list[PartitionBlock]:
@@ -225,6 +236,8 @@ _KEY_ALIASES: dict[str, str] = {
     "boot_attributes_body": "boot-attributes",
     "ramdisk_patch_commands": "ramdisk-patch-commands",
     "boot_install_commands": "ramdisk-patch-commands",
+    "deepsleep_fix": "deepsleep-fix",
+    "deepsleep.fix": "deepsleep-fix",
     "flash_generic": "flash-generic",
     "flash_generic_partitions": "flash-generic",
     "extra_partitions": "extra-partitions",
@@ -328,6 +341,10 @@ def config_from_mapping(data: dict[str, Any]) -> AnyKernelConfig:
 
     cfg.boot_attributes_body = pick("boot-attributes")
     cfg.ramdisk_patch_commands = pick("ramdisk-patch-commands")
+
+    dsf = pick("deepsleep-fix")
+    if dsf is not None:
+        cfg.deepsleep_fix = is_truthy(dsf)
 
     fg = pick("flash-generic")
     if fg is not None:
@@ -547,6 +564,56 @@ def _strip_tuna_examples(install_body: str) -> str:
     return text
 
 
+def _collect_install_snippets(config: AnyKernelConfig, existing_text: str) -> str:
+    snippets: list[str] = []
+    if config.deepsleep_fix and DEEPSLEEP_FIX_MARKER not in existing_text:
+        snippets.append(DEEPSLEEP_FIX_SNIPPET)
+    if config.ramdisk_patch_commands and config.ramdisk_patch_commands.strip():
+        snippets.append(config.ramdisk_patch_commands.strip())
+    return "\n\n".join(snippets)
+
+
+def _inject_after_unpack(body: str, snippet: str) -> str:
+    if not snippet:
+        return body
+    out_lines: list[str] = []
+    inserted = False
+    for line in body.splitlines():
+        out_lines.append(line)
+        if not inserted and re.match(r"^(dump_boot|split_boot);", line.strip()):
+            out_lines.append("")
+            out_lines.append(snippet)
+            inserted = True
+    if inserted:
+        return "\n".join(out_lines)
+    return _inject_before_flash(body, snippet)
+
+
+def _inject_before_flash(body: str, snippet: str) -> str:
+    if not snippet:
+        return body
+    inserted = False
+    out_lines: list[str] = []
+    for line in body.splitlines():
+        if not inserted and re.match(r"^(write_boot|flash_boot);", line.strip()):
+            out_lines.append("")
+            out_lines.append(snippet)
+            out_lines.append("")
+            inserted = True
+        out_lines.append(line)
+    if not inserted:
+        out_lines.extend(["", snippet])
+    return "\n".join(out_lines)
+
+
+def _apply_install_extras(body: str, config: AnyKernelConfig) -> str:
+    if config.deepsleep_fix and DEEPSLEEP_FIX_MARKER not in body:
+        body = _inject_after_unpack(body, DEEPSLEEP_FIX_SNIPPET)
+    if config.ramdisk_patch_commands and config.ramdisk_patch_commands.strip():
+        body = _inject_before_flash(body, config.ramdisk_patch_commands.strip())
+    return body
+
+
 def _build_boot_install_body(
     existing_body: str,
     config: AnyKernelConfig,
@@ -559,35 +626,22 @@ def _build_boot_install_body(
 
     if config.install_mode == "keep":
         body = _strip_tuna_examples(existing_body) if config.strip_example_patches else existing_body.strip()
-        if config.ramdisk_patch_commands:
-            cmds = config.ramdisk_patch_commands.strip()
-            inserted = False
-            out_lines: list[str] = []
-            for line in body.splitlines():
-                if not inserted and re.match(r"^(write_boot|flash_boot);", line.strip()):
-                    out_lines.append("")
-                    out_lines.append(cmds)
-                    out_lines.append("")
-                    inserted = True
-                out_lines.append(line)
-            if not inserted:
-                out_lines.append(cmds)
-            body = "\n".join(out_lines)
-        return body
+        return _apply_install_extras(body, config)
 
+    extra_cmds = _collect_install_snippets(config, "")
     parts: list[str] = []
     if config.install_mode == "dump_write":
         parts.append("dump_boot;")
-        if config.ramdisk_patch_commands:
+        if extra_cmds:
             parts.append("")
-            parts.append(config.ramdisk_patch_commands.strip())
+            parts.append(extra_cmds)
         parts.append("")
         parts.append("write_boot;")
     elif config.install_mode == "split_flash":
         parts.append("split_boot;")
-        if config.ramdisk_patch_commands:
+        if extra_cmds:
             parts.append("")
-            parts.append(config.ramdisk_patch_commands.strip())
+            parts.append(extra_cmds)
         parts.append("")
         parts.append("flash_boot;")
 
@@ -806,8 +860,8 @@ def configure_anykernel_script(
             + f"{install_match.group(1)}{new_body}{install_match.group(3)}"
             + text[install_match.end() :]
         )
-    elif config.ramdisk_patch_commands:
-        text = text.rstrip() + "\n\n" + config.ramdisk_patch_commands.strip() + "\n"
+    elif config.deepsleep_fix or (config.ramdisk_patch_commands and config.ramdisk_patch_commands.strip()):
+        text = _apply_install_extras(text.rstrip(), config) + "\n"
 
     # 5. Append extra partition blocks if configured
     if config.extra_partitions:
@@ -844,6 +898,7 @@ def configure_anykernel_script(
             "ramdisk_compression": comp_match.group(1).strip() if comp_match else "",
             "patch_vbmeta_flag": vbmeta_match.group(1).strip() if vbmeta_match else "",
             "install_mode": config.install_mode,
+            "deepsleep_fix": config.deepsleep_fix or (DEEPSLEEP_FIX_MARKER in text),
             "ak_base_version": state.get("ak_base_version", ""),
         },
     )

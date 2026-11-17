@@ -152,6 +152,11 @@ def _add_config_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strip-example-patches", default=None, help="Remove upstream tuna sample patches")
     parser.add_argument("--boot-attributes", default=None, help="Override body of boot_attributes()")
     parser.add_argument("--ramdisk-patch-commands", default=None, help="Shell commands inserted into boot install")
+    parser.add_argument(
+        "--deepsleep-fix",
+        default=None,
+        help="Include @Chainfire SCSI write_protect/cache_type deepsleep fix in anykernel.sh (true/false)",
+    )
     parser.add_argument("--flash-generic", default=None, help="Extra partitions for flash_generic in split_flash mode")
     parser.add_argument("--extra-partitions", default=None, help="JSON array of extra partition blocks")
     parser.add_argument("--strict", default=None, help="Fail validation on upstream default warnings")
@@ -193,6 +198,7 @@ def _collect_config_overrides(args: argparse.Namespace) -> dict[str, Any]:
         "strip-example-patches": _pick_str(args.strip_example_patches, "strip-example-patches"),
         "boot-attributes": _pick_raw(args.boot_attributes, "boot-attributes"),
         "ramdisk-patch-commands": _pick_raw(args.ramdisk_patch_commands, "ramdisk-patch-commands"),
+        "deepsleep-fix": _pick_str(args.deepsleep_fix, "deepsleep-fix"),
         "flash-generic": _pick_raw(args.flash_generic, "flash-generic"),
         "extra-partitions": _pick_raw(args.extra_partitions, "extra-partitions"),
         "strict": _pick_str(args.strict, "strict"),

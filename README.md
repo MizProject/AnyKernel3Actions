@@ -8,7 +8,7 @@ Modular, zero-dependency Python GitHub Actions component for packaging compiled 
 - **Clean AnyKernel3 base preparation (`repo.py`)** — shallow-clones `https://github.com/osm0sis/AnyKernel3.git` with `--no-tags` (or copies a local `anykernel-path`), deletes all `.git` tags, `.git`, `.github`, `.git*` metadata, and optionally `README.md`, while preserving `LICENSE` and validating AnyKernel3 structure.
 - **Compiled kernel processing (`kernel.py`)** — discovers compiled kernel images in priority order (`Image.gz-dtb`, `Image.lz4-dtb`, ..., `Image.gz`, `zImage`, `Image`), verifies binary header magic and embedded Linux strings (`inspect_kernel_binary`), extracts Linux kernel version from `kernel.release` / `utsrelease.h` or compressed/raw binaries (`raw`, `gzip`, `xz`/`lzma`, `bz2`, pure-Python `lz4`), concatenates `*.dtb` trees or stages `dtb`/`dtbo`/`dt`/`recovery_dtbo`/`system_dlkm`/`vendor_dlkm`, stages `.ko` modules (with optional stripping and auto-enabling `do.modules=1`), and copies `ramdisk/`, `vendor_ramdisk/`, `patch/`, `vendor_patch/`, `banner`, and `version`.
 - **[Beta] Autodetect & artifact scour (`discover.py`)** — opt-in component (`autodetect: true` or [components/discover/action.yaml](components/discover/action.yaml)) that checks the current directory, indexes the workspace for a Linux kernel source tree (`Makefile` + `arch/`), inspects `out/` and `arch/<arch>/boot/`, and scours downloaded GitHub Actions artifacts (`artifacts/`, `artifacts-dir`, `$RUNNER_TEMP`) while rejecting fake, text, ELF, or corrupt files.
-- **Easy `anykernel.sh` configuration (`config.py`)** — configures `properties()` (`kernel.string`, `do.devicecheck`, `do.modules`, `do.systemless`, `do.cleanup`, `do.cleanuponabort`, dynamic `device.name1..N`, `supported.versions`, `supported.patchlevels`, `supported.vendorpatchlevels`, plus custom keys), primary boot shell variables (`BLOCK`, `IS_SLOT_DEVICE`, `RAMDISK_COMPRESSION`, `PATCH_VBMETA_FLAG`, `CUSTOMDD`, `SLOT_SELECT`, `NO_BLOCK_DISPLAY`, `NO_MAGISK_CHECK`, `NO_VBMETA_PARTITION_PATCH`), `dump_write` vs `split_flash` install flow (automatically stripping Galaxy Nexus `tuna` sample edits), extra partition blocks (`init_boot`, `vendor_kernel_boot`, `vendor_boot`), and POSIX syntax validation (`sh -n`).
+- **Easy `anykernel.sh` configuration (`config.py`)** — configures `properties()` (`kernel.string`, `do.devicecheck`, `do.modules`, `do.systemless`, `do.cleanup`, `do.cleanuponabort`, dynamic `device.name1..N`, `supported.versions`, `supported.patchlevels`, `supported.vendorpatchlevels`, plus custom keys), primary boot shell variables (`BLOCK`, `IS_SLOT_DEVICE`, `RAMDISK_COMPRESSION`, `PATCH_VBMETA_FLAG`, `CUSTOMDD`, `SLOT_SELECT`, `NO_BLOCK_DISPLAY`, `NO_MAGISK_CHECK`, `NO_VBMETA_PARTITION_PATCH`), `dump_write` vs `split_flash` install flow (automatically stripping Galaxy Nexus `tuna` sample edits), optional `@Chainfire` SCSI `deepsleep-fix`, extra partition blocks (`init_boot`, `vendor_kernel_boot`, `vendor_boot`), and POSIX syntax validation (`sh -n`).
 - **Flashable zip packaging (`packager.py`)** — produces clean flashable `.zip` archives excluding `.git`, `.github`, `README.md`, and `*placeholder` files, preserves Unix executable permissions (`0755`) on `update-binary` and `tools/*`, computes SHA-256/MD5 checksums, and writes a GitHub Step Summary.
 
 ## Quick Start
@@ -50,6 +50,20 @@ See [examples/workflow-example.yml](examples/workflow-example.yml) for a full wo
   - `"1"` — A/B slot devices (`boot_a` and `boot_b`). AnyKernel3 appends the active `_a`/`_b` slot suffix to `BLOCK`.
   - `"0"` — Non-A/B single-slot devices (`boot` only).
   - `"auto"` — Automatically detects whether the target device uses `boot_a`/`boot_b` slots or a single `boot` partition.
+
+### Optional `anykernel.sh` Extras (`deepsleep-fix`)
+
+For devices with the SCSI `write_protect` / `cache_type` deep-sleep quirk, set `deepsleep-fix: "true"` (in `action.yaml`, `components/configure`, `config-file`, or `--deepsleep-fix true` via CLI) to run `@Chainfire`'s SCSI cache fix immediately after unpacking/splitting the boot image (`dump_boot;` / `split_boot;`) and before remaining tweaks and `write_boot;` / `flash_boot;`:
+
+```sh
+# Deepsleep fix (@Chainfire)
+for i in `ls /sys/class/scsi_disk/ 2>/dev/null`; do
+	cat /sys/class/scsi_disk/$i/write_protect 2>/dev/null | grep 1 >/dev/null
+	if [ $? -eq 0 ]; then
+		echo 'temporary none' > /sys/class/scsi_disk/$i/cache_type
+	fi
+done;
+```
 
 ## Modular Components
 
@@ -137,4 +151,8 @@ Individual subcommands are also available (`prepare`, `discover`, `process-kerne
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+## LLM Guide
+
+See [llm.txt](llm.txt) for a structured reference for LLMs on utilizing features, repository architecture, conventions, and maintaining component/option inventories.
 

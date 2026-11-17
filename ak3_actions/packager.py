@@ -161,6 +161,7 @@ def write_package_summary(staging_dir: Path, pkg: PackageResult) -> None:
         f"| Devices | `{devices_str}` (do.devicecheck=`{state.get('do_devicecheck', '')}`) |",
         f"| Block / Slot | `{state.get('block', '')}` / slot=`{state.get('is_slot_device', '')}` |",
         f"| Compression / Mode | `{state.get('ramdisk_compression', '')}` / `{state.get('install_mode', '')}` |",
+        f"| Deepsleep Fix | `{bool(state.get('deepsleep_fix', False))}` |",
     ]
     append_step_summary("\n".join(lines) + "\n")
 

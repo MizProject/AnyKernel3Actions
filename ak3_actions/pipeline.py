@@ -388,6 +388,7 @@ def overrides_from_dict(raw: dict[str, Any]) -> dict[str, Any]:
         "no-magisk-check",
         "no-vbmeta-partition-patch",
         "strip-example-patches",
+        "deepsleep-fix",
         "strict",
     ):
         if bool_key in normalized:
