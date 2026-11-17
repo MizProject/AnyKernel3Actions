@@ -37,7 +37,7 @@ Modular, zero-dependency Python GitHub Actions component for packaging compiled 
     strict: "true"
 ```
 
-See [examples/workflow-example.yml](examples/workflow-example.yml) for a full workflow example.
+See [GUIDE.md](GUIDE.md) for a step-by-step walkthrough categorized into **Quick**, **Intermediate**, and **Precisely Advanced** workflows, and [examples/workflow-example.yml](examples/workflow-example.yml) for a full caller example.
 
 ### Boot Partition (`block`) and A/B Slot (`is-slot-device`) Setup
 

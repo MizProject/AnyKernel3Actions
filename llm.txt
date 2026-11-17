@@ -30,6 +30,7 @@ AnyKernel3Actions/
 ├── main.py                               # Executable Python CLI entrypoint
 ├── pyproject.toml                        # Project metadata (requires-python >= 3.9, dependencies = [])
 ├── README.md                             # User documentation & examples
+├── GUIDE.md                              # Step-by-step usage guide (Quick, Intermediate, Advanced)
 ├── llm.txt                               # This LLM guide & codebase inventory
 ├── .gitignore
 ├── .github/workflows/ci.yml              # Unit tests & action smoke tests
